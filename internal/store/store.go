@@ -3,21 +3,13 @@ package store
 import (
 	"context"
 	"database/sql"
-	"embed"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
-	"strconv"
-	"strings"
 
 	_ "modernc.org/sqlite"
 )
-
-//go:embed migrations/*.sql
-var migrationFiles embed.FS
 
 type Store struct {
 	db *sql.DB
@@ -47,6 +39,16 @@ type Person struct {
 }
 
 func Open(ctx context.Context, path string) (*Store, error) {
+	return open(ctx, path, true)
+}
+
+// OpenForLibraryMigration skips startup recovery writes, so a refused
+// snapshot cannot alter an existing library.
+func OpenForLibraryMigration(ctx context.Context, path string) (*Store, error) {
+	return open(ctx, path, false)
+}
+
+func open(ctx context.Context, path string, recoverInterrupted bool) (*Store, error) {
 	if path == "" {
 		return nil, errors.New("database path is empty")
 	}
@@ -80,6 +82,9 @@ func Open(ctx context.Context, path string) (*Store, error) {
 		db.Close()
 		return nil, err
 	}
+	if !recoverInterrupted {
+		return &Store{db: db}, nil
+	}
 	if _, err := db.ExecContext(ctx, `UPDATE titles SET import_status = 'failed',
 		import_error = 'Import interrupted; retry to continue', updated_at = CURRENT_TIMESTAMP
 		WHERE import_status = 'importing'`); err != nil {
@@ -98,102 +103,6 @@ func Open(ctx context.Context, path string) (*Store, error) {
 func (s *Store) Close() error { return s.db.Close() }
 
 func (s *Store) Ping(ctx context.Context) error { return s.db.PingContext(ctx) }
-
-func migrate(ctx context.Context, db *sql.DB) error {
-	if _, err := db.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_migrations (
-		version INTEGER PRIMARY KEY,
-		applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-	)`); err != nil {
-		return fmt.Errorf("create migration ledger: %w", err)
-	}
-	entries, err := fs.ReadDir(migrationFiles, "migrations")
-	if err != nil {
-		return fmt.Errorf("read migrations: %w", err)
-	}
-	var appliedCount, titleTableCount int
-	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations").Scan(&appliedCount); err != nil {
-		return fmt.Errorf("check migration ledger: %w", err)
-	}
-	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'titles'").Scan(&titleTableCount); err != nil {
-		return fmt.Errorf("check database schema: %w", err)
-	}
-	if appliedCount == 0 && titleTableCount == 0 {
-		// New libraries get one complete schema. Keep historical migrations for
-		// existing libraries that still need to advance from an older version.
-		body, err := migrationFiles.ReadFile("migrations/0001_initial.sql")
-		if err != nil {
-			return fmt.Errorf("read baseline schema: %w", err)
-		}
-		tx, err := db.BeginTx(ctx, nil)
-		if err != nil {
-			return fmt.Errorf("begin baseline schema: %w", err)
-		}
-		defer tx.Rollback()
-		for _, statement := range strings.Split(string(body), ";") {
-			if statement = strings.TrimSpace(statement); statement != "" {
-				if _, err := tx.ExecContext(ctx, statement); err != nil {
-					return fmt.Errorf("apply baseline schema: %w", err)
-				}
-			}
-		}
-		for _, version := range []int{1, 6, 7, 8} {
-			if _, err := tx.ExecContext(ctx, "INSERT INTO schema_migrations(version) VALUES (?)", version); err != nil {
-				return fmt.Errorf("record baseline version %d: %w", version, err)
-			}
-		}
-		if err := tx.Commit(); err != nil {
-			return fmt.Errorf("commit baseline schema: %w", err)
-		}
-	}
-	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
-	for _, entry := range entries {
-		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sql") {
-			continue
-		}
-		prefix, _, ok := strings.Cut(entry.Name(), "_")
-		if !ok {
-			return fmt.Errorf("invalid migration filename %q", entry.Name())
-		}
-		version, err := strconv.Atoi(prefix)
-		if err != nil {
-			return fmt.Errorf("invalid migration version in %q", entry.Name())
-		}
-		var applied int
-		err = db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations WHERE version = ?", version).Scan(&applied)
-		if err != nil {
-			return fmt.Errorf("check migration %d: %w", version, err)
-		}
-		if applied > 0 {
-			continue
-		}
-		body, err := migrationFiles.ReadFile("migrations/" + entry.Name())
-		if err != nil {
-			return fmt.Errorf("read migration %d: %w", version, err)
-		}
-		tx, err := db.BeginTx(ctx, nil)
-		if err != nil {
-			return fmt.Errorf("begin migration %d: %w", version, err)
-		}
-		for _, statement := range strings.Split(string(body), ";") {
-			statement = strings.TrimSpace(statement)
-			if statement == "" {
-				continue
-			}
-			if _, err := tx.ExecContext(ctx, statement); err != nil {
-				tx.Rollback()
-				return fmt.Errorf("apply migration %d: %w", version, err)
-			}
-		}
-		if _, err := tx.ExecContext(ctx, "INSERT INTO schema_migrations(version) VALUES (?)", version); err != nil {
-			tx.Rollback()
-			return fmt.Errorf("record migration %d: %w", version, err)
-		}
-		if err := tx.Commit(); err != nil {
-			return fmt.Errorf("commit migration %d: %w", version, err)
-		}
-	}
-	return nil
-}
 
 func (s *Store) ListTitles(ctx context.Context) ([]Title, error) {
 	return s.listTitles(ctx, -1, 0)

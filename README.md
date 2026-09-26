@@ -13,6 +13,19 @@ You need Docker Compose and a TMDB API key or API Read Access Token.
 
 Use `make status` to check the container, `make logs` to follow its logs, and `make down` to stop it. `make down` keeps the database. `.env` and the default `data/` directory are ignored by Git. The default host bind is `127.0.0.1`; `SHOWLIB_HOST_BIND` and `SHOWLIB_PORT` in `.env` change the bind address and port.
 
+## Optional library migration
+
+A first install runs **migration 1** automatically and starts with an empty library. **Migration 2** is an optional, bundled snapshot of the 185 titles saved on September 26, 2026, including watched progress, people, credits, and episode data. It uses no TMDB requests. It never runs during normal startup. The snapshot is part of the source code and Docker image, so keep the repository and image private.
+
+To load that snapshot into a **new, empty** database:
+
+1. Configure `.env` and run `make up` once to build the image and create the empty database.
+2. Run `make down` to stop the app. If the database contains anything you want to keep, back it up using the procedure below and choose a **new database path** instead of replacing it.
+3. Run `make migrate-library`. This applies migration 2 as one transaction. It refuses a database with any existing library records or a recorded migration 2, leaving its data untouched.
+4. Run `make up`, open the Titles page, and confirm the library has 185 titles.
+
+The migration is designed for a fresh database. **Do not delete or overwrite your current database to use it.** Existing installations keep their saved library and do not need migration 2. For a native Go run, stop the server and run `go run ./cmd/showlib migrate-library` with `SHOWLIB_DB_PATH` set to the empty database file.
+
 ## Back up and restore
 
 The database is in `SHOWLIB_DATA_DIR` (default `./data`) under `SHOWLIB_DB_FILENAME` (default `showlib.sqlite`). Back up the **whole data directory**, including any SQLite `-wal` or `-shm` files. For the default location:
@@ -52,7 +65,7 @@ For a native Go run, use `go run ./cmd/showlib`. It reads `.env`; `SHOWLIB_DB_PA
 - **People:** Search saved people by real name, character, or crew job. Open a person to see their headshot, credited roles, and watched movies or episodes. Expand shows by season and episode.
 - **Connections:** See shared cast and crew between watched titles, using only credits within the saved watched range.
 
-Titles and People search update as you type and load more results as you scroll. The app has one shared library and no account system. For detailed behavior and the MVP plan, see [docs/spec.md](docs/spec.md); release checks are in [docs/phase-5.md](docs/phase-5.md).
+Titles and People search update as you type and load more results as you scroll. The app has one shared library and no account system.
 
 ## TMDB attribution
 

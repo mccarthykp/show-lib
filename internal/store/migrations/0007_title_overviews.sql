@@ -1,1 +1,0 @@
-ALTER TABLE titles ADD COLUMN overview TEXT;

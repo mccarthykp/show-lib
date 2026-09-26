@@ -18,10 +18,38 @@ import (
 )
 
 func main() {
-	if err := run(); err != nil {
+	var err error
+	if len(os.Args) == 2 && os.Args[1] == "migrate-library" {
+		err = migrateLibrary()
+	} else if len(os.Args) == 1 {
+		err = run()
+	} else {
+		err = errors.New("usage: showlib [migrate-library]")
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, "show-lib:", err)
 		os.Exit(1)
 	}
+}
+
+func migrateLibrary() error {
+	cfg, err := config.Load()
+	if err != nil {
+		return fmt.Errorf("configuration: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
+	defer cancel()
+	db, err := store.OpenForLibraryMigration(ctx, cfg.DatabasePath)
+	if err != nil {
+		return fmt.Errorf("database: %w", err)
+	}
+	defer db.Close()
+	titles, err := db.ApplyLibrarySnapshot(ctx)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("Library migration 2 complete: %d titles restored.\n", titles)
+	return nil
 }
 
 func run() error {

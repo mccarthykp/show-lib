@@ -18,8 +18,8 @@ func TestOpenMigratesAndPersistsMultipleCredits(t *testing.T) {
 	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations").Scan(&migrationCount); err != nil {
 		t.Fatal(err)
 	}
-	if migrationCount != 4 {
-		t.Fatalf("migration count = %d, want 4", migrationCount)
+	if migrationCount != 1 {
+		t.Fatalf("migration count = %d, want 1", migrationCount)
 	}
 	result, err := s.db.ExecContext(ctx, `INSERT INTO titles(media_type, tmdb_id, name, import_status, watched)
 		VALUES ('tv', 1398, 'The Sopranos', 'complete', 1)`)
@@ -111,48 +111,42 @@ func TestOpenMigratesAndPersistsMultipleCredits(t *testing.T) {
 	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations").Scan(&migrationCount); err != nil {
 		t.Fatal(err)
 	}
-	if migrationCount != 4 {
-		t.Fatalf("reopened migration count = %d, want 4", migrationCount)
+	if migrationCount != 1 {
+		t.Fatalf("reopened migration count = %d, want 1", migrationCount)
 	}
 	if _, err := s.GetPerson(ctx, 999); err != sql.ErrNoRows {
 		t.Fatalf("missing person error = %v, want sql.ErrNoRows", err)
 	}
 }
 
-func TestLegacyLibraryUpgradePreservesSavedTitle(t *testing.T) {
+func TestExistingLibraryLedgerPreservesSavedTitle(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "legacy.sqlite")
-	legacy, err := sql.Open("sqlite", path)
+	s, err := Open(ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = legacy.ExecContext(ctx, `
-		CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP);
-		INSERT INTO schema_migrations(version) VALUES (1);
-		CREATE TABLE titles (id INTEGER PRIMARY KEY, media_type TEXT, tmdb_id INTEGER, name TEXT,
-			release_year INTEGER, release_date TEXT, import_status TEXT, import_error TEXT, watched INTEGER,
-			watched_season INTEGER, watched_episode INTEGER, watched_episode_tmdb_id INTEGER,
-			episode_sync_status TEXT, episode_sync_error TEXT, updated_at TEXT);
-		CREATE TABLE people (tmdb_id INTEGER PRIMARY KEY, name TEXT);
+	_, err = s.db.ExecContext(ctx, `
+		INSERT INTO schema_migrations(version) VALUES (2),(3),(4),(5),(6),(7),(8);
 		INSERT INTO titles(media_type, tmdb_id, name, import_status, watched, episode_sync_status)
 			VALUES ('tv', 1398, 'The Sopranos', 'complete', 1, 'pending');`)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := legacy.Close(); err != nil {
+	if err := s.Close(); err != nil {
 		t.Fatal(err)
 	}
-	s, err := Open(ctx, path)
+	s, err = Open(ctx, path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer s.Close()
 	title, err := s.GetTitle(ctx, "tv", 1398)
 	if err != nil || title.Name != "The Sopranos" || !title.Watched {
-		t.Fatalf("upgraded title = %+v, err = %v", title, err)
+		t.Fatalf("existing title = %+v, err = %v", title, err)
 	}
 	var count int
-	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil || count != 4 {
+	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations").Scan(&count); err != nil || count != 8 {
 		t.Fatalf("migration count = %d, err = %v", count, err)
 	}
 }
