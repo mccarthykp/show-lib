@@ -30,7 +30,7 @@ The relationship is derived from shared TMDB person IDs and credits; it does not
 4. Import fetches the title's name, type, release year or first-air year, poster path, overview, and all cast and crew credits available from TMDB. It resolves each credited person's TMDB person ID, display name, credit category, character name(s) for cast, and department/job for crew. Movie credits come from the movie credits endpoint; a series' full credited roster comes from series aggregate credits rather than the latest-season credits endpoint.
 5. For a TV series, cache regular-season episode credits across the full series so person pages can show complete credit history. Use the saved progress marker to determine which of those credits are confirmed within the watched range. The UI displays a concise episode summary (for example, `S1 E2, S1 E4`) with an expandable list when long. Aggregate series roles or episode counts alone do not identify the exact episodes; if a credit has no episode-level match, the UI says `Episode details unavailable` and does not treat it as watched-range evidence.
 6. Long imports run without freezing the page. The user sees an importing, complete, or failed state. Failed imports can be retried without creating duplicate people or credits. A partially imported title is not presented as a complete watched title.
-7. Show cover art immediately before each title on the Titles page and on a person's title list. On a title's own page, show a larger poster beside the title, with type and year directly below the title and a TMDB overview below that. Space these elements evenly alongside the poster. A neutral placeholder keeps the layout consistent when TMDB has no poster; a short unavailable message covers missing overviews. Existing saved titles receive poster and overview metadata without removing or re-adding them. Headshots and other media are outside MVP scope.
+7. Show cover art immediately before each title on the Titles and Add pages and on a person's title list. On a title's own page, show a larger poster beside the title, with type and year directly below the title and a TMDB overview below that. Show headshots in People results and on person pages. Neutral placeholders keep layouts consistent when TMDB has no image; a short unavailable message covers missing overviews. Existing saved titles receive poster and overview metadata without removing or re-adding them.
 
 ### 2. Update series watch progress
 
@@ -42,7 +42,7 @@ The relationship is derived from shared TMDB person IDs and credits; it does not
 ### 3. Browse and search the library
 
 1. The home page lists watched movies and series, with title, type, year, and series progress where applicable. It has a search box that filters the watched library by title and person name.
-2. The navigation has distinct **Titles** and **People** views. The People view lists people credited on at least one library title and supports name search. It distinguishes people with a watched-range credit from those whose series episode placement is later or unknown.
+2. The navigation has distinct **Titles** and **People** views. The People view searches people credited on at least one library title by real name, character, or crew job. It distinguishes people with a watched-range credit from those whose series episode placement is later or unknown.
 3. Each title and person has a stable, directly linkable detail page. Links within the app use these pages so the user can move between a title, a person, and another connected title.
 4. Empty library, no search results, loading, and import errors have clear UI states.
 5. Titles, People, Add results, and title-page credit filters match typed characters in their original order, ignoring spaces and dashes on both sides. Exact and compact matches rank ahead of matches with more skipped characters. Results with reordered or extra typed characters do not match. Add searches can only rank candidates returned by TMDB.
@@ -84,7 +84,7 @@ The relationship is derived from shared TMDB person IDs and credits; it does not
 
 Use the TMDB API v3 for title search, details, credits, and episode data. The app needs a TMDB API Read Access Token or API key; the token stays on the server and is never sent to the browser. The user supplies it through deployment configuration, not a committed file. Show-lib does not scrape TMDB pages.
 
-- Search uses TMDB [movie search](https://developer.themoviedb.org/reference/search-movie) and [TV search](https://developer.themoviedb.org/reference/search-tv). Direct URLs/IDs resolve to the matching media type.
+- Search uses TMDB [movie search](https://developer.themoviedb.org/reference/search-movie) and [TV search](https://developer.themoviedb.org/reference/search-tv). Adding by TMDB ID or URL is outside scope.
 - Movie cast and crew come from [movie credits](https://developer.themoviedb.org/reference/movie-credits).
 - The complete *TMDB-available* series roster comes from [TV series aggregate credits](https://developer.themoviedb.org/reference/tv-series-aggregate-credits). TMDB's standard [TV series credits](https://developer.themoviedb.org/reference/tv-series-credits) endpoint describes the latest season and must not be mistaken for the full-series roster.
 - Episode choices come from [TV season details](https://developer.themoviedb.org/reference/tv-season-details). Watched-range appearances are checked against [TV episode credits](https://developer.themoviedb.org/reference/tv-episode-credits). A series-level aggregate credit alone is not proof of appearance in a particular episode.
@@ -98,7 +98,7 @@ Imports should be repeatable and idempotent. A title refresh replaces or reconci
 1. **Titles:** watched-title grid/list, library search, Add title.
 2. **Add title:** TMDB title search, result selection, series progress prompt, import progress/error.
 3. **Title detail:** title information, series progress/update control, full cast, full crew, watched-range connections to other titles, Remove title.
-4. **People:** search people in watched titles by their name, a saved title, character, or crew job. Name matches show only the person's name, role/job matches show only matching roles/jobs, and title matches show the roles/jobs on that title. Results link to person pages; an empty query shows only the search form.
+4. **People:** search people in watched titles by their real name, character, or crew job. Name matches show only the person's name; role/job matches show only matching roles/jobs. Results link to person pages; an empty query shows only the search form.
 5. **Person detail:** name and every library-title credit, with watched-range status.
 6. **Project README:** TMDB logo and attribution notice at the bottom of `README.md`; the local application has no attribution footer or About page.
 
@@ -175,9 +175,11 @@ Complete the phases in order. Each phase ends with a working, reviewable increme
 
 ### Phase 5 — Harden and release 1.0.0
 
+**Status:** Complete for local 1.0.0. Release checks and remaining Tailscale deployment details are recorded in [phase-5.md](phase-5.md).
+
 - Handle TMDB outages, `429` responses, interrupted imports, missing fields, and large series without freezing the UI or presenting partial data as complete. Verify retries and refreshes preserve watched state and progress.
 - Verify README attribution. Finish responsive layouts, navigation, loading/error states, and the Docker setup, backup, restore, and troubleshooting instructions.
-- Keep new-install migrations consolidated into a clean baseline before the 1.0.0 release. Preserve all existing development-library data; verify the current database still opens and its saved titles remain available after each migration cleanup.
+- Keep new-install migrations consolidated into a clean baseline before the 1.0.0 release. Preserve all existing library data; verify the current database still opens and its saved titles remain available after each migration cleanup.
 - Run the full acceptance checklist above against a clean database and again after a container restart. Check that the TMDB credential is absent from client responses, logs, and version control; verify localhost is the default binding and the host binding is configurable.
 - **Exit gate:** all acceptance criteria pass, no unresolved blocker remains, and the app is tagged **1.0.0** with documented local setup and recovery steps. Tailscale routing is configured when the owner provides the home-server details; it requires no application-code change.
 
@@ -186,11 +188,3 @@ Complete the phases in order. Each phase ends with a working, reviewable increme
 1. **TMDB credential:** A local API key was supplied for Phase 0. Each later deployment must configure its own API Read Access Token or API key through a secret environment setting.
 2. **Episode-credit coverage:** Phase 0 validated representative recurring cast, guest cast, and crew payloads. During implementation, keep missing episode mapping marked as unknown rather than inferring a connection outside the verified watched range.
 3. **Tailscale deployment:** The home-server environment, hostname, and routing will be supplied at the end of development. Localhost is the active development target.
-
------------
-
-When entering a show or movie on the People page search bar, ensure each person has their role/job listed next to their real name. If a person has multiple roles or jobs for the searched show/movie, comma separate them.
-
-Additionally, when on a specific person's page, shows and movies should have the earliest to the latest year that person was active on the show, as well as how many episodes they are credited for. For example, Edie Falco's page should have a "The Sopranos" container, next to the title should say "Carmela Soprano", and "1999-2007, 86 eps" should be fixed to the right side of the container. A movie should just show the release date. Clicking on the show or movie where they are credited should not simply go to that show or movie's page, but should stay on the person's page and expand the show or movie's container to list each season and episode they are accredited for, with the name of each season and name of each episode.
-
-The expanded person-page list is limited to episodes the user has watched. A person-name search shows only real names, while a role/job search shows only the matching role or job next to each real name.

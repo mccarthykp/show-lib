@@ -241,28 +241,72 @@ func (c *Client) getQuery(ctx context.Context, path string, query url.Values, ds
 		query.Set("api_key", c.apiKey)
 	}
 	endpoint.RawQuery = query.Encode()
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
-	if err != nil {
-		return errors.New("create TMDB request")
-	}
-	if c.token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.token)
-	}
-	req.Header.Set("Accept", "application/json")
-	resp, err := c.http.Do(req)
-	if err != nil {
-		var urlErr *url.Error
-		if errors.As(err, &urlErr) {
-			err = urlErr.Err // Strip the URL, which may contain an API key.
+	for attempt := 0; attempt < 4; attempt++ {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint.String(), nil)
+		if err != nil {
+			return errors.New("create TMDB request")
 		}
-		return fmt.Errorf("TMDB request failed: %w", err)
+		if c.token != "" {
+			req.Header.Set("Authorization", "Bearer "+c.token)
+		}
+		req.Header.Set("Accept", "application/json")
+		resp, err := c.http.Do(req)
+		if err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			var urlErr *url.Error
+			if errors.As(err, &urlErr) {
+				err = urlErr.Err // Strip the URL, which may contain an API key.
+			}
+			return fmt.Errorf("TMDB request failed: %w", err)
+		}
+		if resp.StatusCode == http.StatusOK {
+			err = json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(dst)
+			resp.Body.Close()
+			if err != nil {
+				return fmt.Errorf("decode TMDB response: %w", err)
+			}
+			return nil
+		}
+		resp.Body.Close()
+		if attempt == 3 || !retryableStatus(resp.StatusCode) {
+			return fmt.Errorf("TMDB returned HTTP %d", resp.StatusCode)
+		}
+		delay := time.Duration(250<<attempt) * time.Millisecond
+		if resp.StatusCode == http.StatusTooManyRequests {
+			if parsed := retryAfter(resp.Header.Get("Retry-After")); parsed > delay {
+				delay = parsed
+			}
+		}
+		// Long rate limits are surfaced as retryable errors rather than
+		// holding a search request or import worker for an unbounded time.
+		if delay > 30*time.Second {
+			return fmt.Errorf("TMDB returned HTTP %d; retry later", resp.StatusCode)
+		}
+		timer := time.NewTimer(delay)
+		select {
+		case <-ctx.Done():
+			timer.Stop()
+			return ctx.Err()
+		case <-timer.C:
+		}
 	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("TMDB returned HTTP %d", resp.StatusCode)
+	return errors.New("TMDB retry limit reached")
+}
+
+func retryableStatus(status int) bool {
+	return status == http.StatusTooManyRequests || status == http.StatusRequestTimeout || status >= 500 && status <= 599
+}
+
+func retryAfter(value string) time.Duration {
+	if seconds, err := strconv.Atoi(strings.TrimSpace(value)); err == nil && seconds > 0 {
+		return time.Duration(seconds) * time.Second
 	}
-	if err := json.NewDecoder(io.LimitReader(resp.Body, 10<<20)).Decode(dst); err != nil {
-		return fmt.Errorf("decode TMDB response: %w", err)
+	if when, err := http.ParseTime(value); err == nil {
+		if delay := time.Until(when); delay > 0 {
+			return delay
+		}
 	}
-	return nil
+	return 0
 }

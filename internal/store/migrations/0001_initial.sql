@@ -5,6 +5,8 @@ CREATE TABLE titles (
     name TEXT NOT NULL,
     release_year INTEGER,
     release_date TEXT,
+    poster_path TEXT,
+    overview TEXT,
     import_status TEXT NOT NULL DEFAULT 'importing' CHECK (import_status IN ('importing', 'complete', 'failed')),
     import_error TEXT,
     import_token TEXT,
@@ -26,6 +28,8 @@ CREATE TABLE titles (
 CREATE TABLE people (
     tmdb_id INTEGER PRIMARY KEY CHECK (tmdb_id > 0),
     name TEXT NOT NULL,
+    profile_path TEXT,
+    profile_checked_at TEXT,
     source_updated_at TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP

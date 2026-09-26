@@ -110,6 +110,41 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	if err != nil {
 		return fmt.Errorf("read migrations: %w", err)
 	}
+	var appliedCount, titleTableCount int
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM schema_migrations").Scan(&appliedCount); err != nil {
+		return fmt.Errorf("check migration ledger: %w", err)
+	}
+	if err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'titles'").Scan(&titleTableCount); err != nil {
+		return fmt.Errorf("check database schema: %w", err)
+	}
+	if appliedCount == 0 && titleTableCount == 0 {
+		// New libraries get one complete schema. Keep historical migrations for
+		// existing libraries that still need to advance from an older version.
+		body, err := migrationFiles.ReadFile("migrations/0001_initial.sql")
+		if err != nil {
+			return fmt.Errorf("read baseline schema: %w", err)
+		}
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("begin baseline schema: %w", err)
+		}
+		defer tx.Rollback()
+		for _, statement := range strings.Split(string(body), ";") {
+			if statement = strings.TrimSpace(statement); statement != "" {
+				if _, err := tx.ExecContext(ctx, statement); err != nil {
+					return fmt.Errorf("apply baseline schema: %w", err)
+				}
+			}
+		}
+		for _, version := range []int{1, 6, 7, 8} {
+			if _, err := tx.ExecContext(ctx, "INSERT INTO schema_migrations(version) VALUES (?)", version); err != nil {
+				return fmt.Errorf("record baseline version %d: %w", version, err)
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("commit baseline schema: %w", err)
+		}
+	}
 	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".sql") {

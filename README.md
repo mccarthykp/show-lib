@@ -13,6 +13,25 @@ You need Docker Compose and a TMDB API key or API Read Access Token.
 
 Use `make status` to check the container, `make logs` to follow its logs, and `make down` to stop it. `make down` keeps the database. `.env` and the default `data/` directory are ignored by Git. The default host bind is `127.0.0.1`; `SHOWLIB_HOST_BIND` and `SHOWLIB_PORT` in `.env` change the bind address and port.
 
+## Back up and restore
+
+The database is in `SHOWLIB_DATA_DIR` (default `./data`) under `SHOWLIB_DB_FILENAME` (default `showlib.sqlite`). Back up the **whole data directory**, including any SQLite `-wal` or `-shm` files. For the default location:
+
+```sh
+make down
+cp -a data /path/to/backup/showlib-data
+make up
+```
+
+To restore, stop the app, save a copy of the current data directory, copy the backed-up directory back to the configured `SHOWLIB_DATA_DIR`, then run `make up`. For a custom directory, substitute that path in the commands. Keep backups outside the project and protect them like the library itself. `make down` does not delete the data directory.
+
+## Troubleshooting
+
+- **App will not start:** Run `make status` and `make logs`. Check Docker is running, one TMDB credential is set in `.env`, the configured data directory is writable, and `SHOWLIB_PORT` is available.
+- **TMDB search or import fails:** Existing saved titles remain available. Open the failed title and choose **Retry import**, or retry the search when TMDB is available. Rate limits and temporary TMDB server errors are retried briefly before an error is shown.
+- **A show says episode credits are unavailable:** Its saved watch marker is retained. Open the title and choose **Retry episode credits**. Connections that need episode evidence appear after the sync completes.
+- **Moved the database and the library appears empty:** Stop the app and check both `SHOWLIB_DATA_DIR` and `SHOWLIB_DB_FILENAME` in `.env`. Changing the path creates a new database; it does not move the old one.
+
 ## Choose the database file
 
 By default, the host database is `./data/showlib.sqlite`. To choose another host path, set its directory and filename in `.env`:
@@ -33,7 +52,7 @@ For a native Go run, use `go run ./cmd/showlib`. It reads `.env`; `SHOWLIB_DB_PA
 - **People:** Search saved people by real name, character, or crew job. Open a person to see their headshot, credited roles, and watched movies or episodes. Expand shows by season and episode.
 - **Connections:** See shared cast and crew between watched titles, using only credits within the saved watched range.
 
-Titles and People search update as you type and load more results as you scroll. The app has one shared library and no account system. For detailed behavior and the MVP plan, see [docs/spec.md](docs/spec.md).
+Titles and People search update as you type and load more results as you scroll. The app has one shared library and no account system. For detailed behavior and the MVP plan, see [docs/spec.md](docs/spec.md); release checks are in [docs/phase-5.md](docs/phase-5.md).
 
 ## TMDB attribution
 
