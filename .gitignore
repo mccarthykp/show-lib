@@ -1,0 +1,47 @@
+# Local credentials and overrides
+.env
+.env.*
+!.env.example
+.envrc
+compose.override.yml
+compose.override.yaml
+docker-compose.override.yml
+docker-compose.override.yaml
+
+# Persistent application data and local databases
+/data/
+/storage/
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+
+# Go build, test, and coverage output (keep go.mod and go.sum tracked)
+/bin/
+/dist/
+/out/
+*.exe
+*.test
+*.out
+*.prof
+*.coverprofile
+coverage.out
+coverage.html
+go.work
+go.work.sum
+
+# Local logs and scratch files
+*.log
+/tmp/
+
+# Editor and OS files
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo

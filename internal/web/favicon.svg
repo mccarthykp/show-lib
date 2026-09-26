@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36">
+  <defs>
+    <mask id="reel-cutouts">
+      <rect width="36" height="36" fill="white"/>
+      <g fill="black">
+        <circle cx="18" cy="18" r="2"/>
+        <circle cx="18" cy="8.5" r="3"/>
+        <circle cx="27" cy="15" r="3"/>
+        <circle cx="23.5" cy="26" r="3"/>
+        <circle cx="12.5" cy="26" r="3"/>
+        <circle cx="9" cy="15" r="3"/>
+      </g>
+    </mask>
+  </defs>
+  <circle cx="18" cy="18" r="15" fill="#a7e8dc" mask="url(#reel-cutouts)"/>
+</svg>
