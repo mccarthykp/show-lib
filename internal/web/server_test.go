@@ -141,6 +141,7 @@ func TestHealthAndEmptyLibraryRoutes(t *testing.T) {
 		{"/favicon.svg", http.StatusOK, `<svg xmlns="http://www.w3.org/2000/svg"`},
 		{"/favicon.ico", http.StatusFound, `/favicon.svg?v=3`},
 		{"/assets/live-search.js", http.StatusOK, "AbortController"},
+		{"/assets/theme.css", http.StatusOK, "prefers-reduced-motion"},
 		{"/titles", http.StatusOK, "Your watched library is empty"},
 		{"/people", http.StatusOK, `data-live-search="people"`},
 		{"/add", http.StatusOK, `data-live-search="add"`},
@@ -164,6 +165,23 @@ func TestHealthAndEmptyLibraryRoutes(t *testing.T) {
 		if (tc.path == "/titles" || tc.path == "/people" || tc.path == "/add") &&
 			!strings.Contains(response.Body.String(), `rel="icon" type="image/svg+xml" sizes="any" href="/favicon.svg?v=3"`) {
 			t.Error("page does not link the film reel favicon")
+		}
+		if tc.path == "/assets/theme.css" && response.Header().Get("Content-Type") != "text/css; charset=utf-8" {
+			t.Errorf("theme content type = %q", response.Header().Get("Content-Type"))
+		}
+		if tc.path == "/titles" && !strings.Contains(response.Body.String(), `href="/assets/theme.css?v=5"`) {
+			t.Error("page does not link the shared theme")
+		}
+		if tc.path == "/titles" && !strings.Contains(response.Body.String(), `placeholder="Title or person"`) {
+			t.Error("title search placeholder is incorrect")
+		}
+		if tc.path == "/people" && (!strings.Contains(response.Body.String(), "Search people in your library") ||
+			!strings.Contains(response.Body.String(), `placeholder="Person, role or crew job"`)) {
+			t.Error("people search copy is incorrect")
+		}
+		if (tc.path == "/titles" || tc.path == "/people" || tc.path == "/add") &&
+			!strings.Contains(response.Body.String(), `class="nav-add" href="/add" aria-label="Add a title"`) {
+			t.Error("add menu control lacks its accessible label")
 		}
 	}
 }
@@ -209,6 +227,9 @@ func TestProgressRouteUsesCachedEpisodes(t *testing.T) {
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), `src="https://image.tmdb.org/t/p/w185/series.jpg"`) {
 		t.Fatalf("title list poster = %d, body=%q", response.Code, response.Body.String())
 	}
+	if !strings.Contains(response.Body.String(), "Search titles in your library") {
+		t.Fatal("title search label does not describe titles only")
+	}
 	response = httptest.NewRecorder()
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/titles/tv/8/progress", nil))
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "Second") {
@@ -232,7 +253,7 @@ func TestProgressRouteUsesCachedEpisodes(t *testing.T) {
 	handler.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/titles/tv/8", nil))
 	if response.Code != http.StatusOK || !strings.Contains(response.Body.String(), "Watched through season 1, episode 2") ||
 		!strings.Contains(response.Body.String(), `src="https://image.tmdb.org/t/p/w342/series.jpg"`) ||
-		!strings.Contains(response.Body.String(), "Watched credit") {
+		strings.Contains(response.Body.String(), "credit-state watched") {
 		t.Fatalf("updated title page = %d, body=%q", response.Code, response.Body.String())
 	}
 	response = httptest.NewRecorder()

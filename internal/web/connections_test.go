@@ -109,7 +109,7 @@ func TestConnectionsFollowWatchedProgressAndRemoval(t *testing.T) {
 		"Ben</a>, <a href=\"/people/3\">Cal</a> also appear in <a href=\"/titles/tv/2\">Second</a>",
 		"Anna</a> also appears in <a href=\"/titles/movie/3\">Movie</a>, <a href=\"/titles/tv/2\">Second</a>",
 		"Anchor Friend in Anchor; Second Friend in",
-		"1 watched credited episodes in Anchor",
+		"1 credited episode in Anchor",
 	} {
 		if !strings.Contains(anchor, want) {
 			t.Errorf("anchor connections missing %q", want)

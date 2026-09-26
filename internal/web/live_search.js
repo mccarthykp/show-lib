@@ -96,7 +96,7 @@
       } catch (error) {
         if (current !== sequence || error.name === "AbortError") return;
         results.replaceChildren();
-        status.textContent = "Search unavailable. Press Search to retry.";
+        status.textContent = "Search unavailable. Try typing again.";
       } finally {
         if (current === sequence) {
           results.removeAttribute("aria-busy");
