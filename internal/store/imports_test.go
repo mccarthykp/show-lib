@@ -135,19 +135,19 @@ func TestSearchPeopleByPersonAndCredit(t *testing.T) {
 			}
 		}
 	}
-	for _, tc := range []struct{ query, want string }{
-		{"Alex Rivera", ""},
-		{"jamie", ""},
-		{"screenplay", "Screenplay"},
-		{"story", "Story"},
-		{"writing", "Writing"},
-		{"Alex Rivea", ""},
-		{"Detectiv Morgan", "Detective Morgan"},
-		{"writng", "Writing"},
+	for _, tc := range []struct{ query, want, label string }{
+		{"Alex Rivera", "", ""},
+		{"jamie", "", ""},
+		{"screenplay", "Screenplay", "Crew"},
+		{"story", "Story", "Crew"},
+		{"writing", "Writing", "Crew"},
+		{"Alex Rivea", "", ""},
+		{"Detectiv Morgan", "Detective Morgan", "Role"},
+		{"writng", "Writing", "Crew"},
 	} {
 		people, err := s.SearchPeople(ctx, tc.query)
-		if err != nil || len(people) != 1 || people[0].Roles != tc.want {
-			t.Fatalf("search %q roles = %+v, want %q, err=%v", tc.query, people, tc.want, err)
+		if err != nil || len(people) != 1 || people[0].Roles != tc.want || people[0].MatchLabel != tc.label {
+			t.Fatalf("search %q roles = %+v, want %q (%s), err=%v", tc.query, people, tc.want, tc.label, err)
 		}
 	}
 	people, err := s.SearchPeople(ctx, "The Tst Show")

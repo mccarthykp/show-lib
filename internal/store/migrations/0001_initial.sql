@@ -70,7 +70,21 @@ CREATE TABLE episode_person_credits (
     PRIMARY KEY (episode_id, person_tmdb_id, category, character_name, job)
 );
 
+CREATE TABLE watchlist (
+    media_type TEXT NOT NULL CHECK (media_type IN ('movie', 'tv')),
+    tmdb_id INTEGER NOT NULL CHECK (tmdb_id > 0),
+    name TEXT NOT NULL,
+    release_year INTEGER,
+    release_date TEXT,
+    poster_path TEXT,
+    overview TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (media_type, tmdb_id)
+);
+
 CREATE INDEX credits_person_idx ON credits(person_tmdb_id);
 CREATE INDEX credits_title_idx ON credits(title_id);
 CREATE INDEX episodes_series_idx ON episodes(series_title_id, season_number, episode_number);
 CREATE INDEX episode_person_idx ON episode_person_credits(person_tmdb_id, episode_id);
+CREATE INDEX watchlist_created_idx ON watchlist(created_at DESC, media_type, tmdb_id);

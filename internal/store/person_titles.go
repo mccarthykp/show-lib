@@ -43,11 +43,14 @@ type PersonTitle struct {
 	TMDBID             int64
 	Name               string
 	PosterPath         sql.NullString
+	Overview           string
 	Roles              string
 	Period             string
 	SyncStatus         string
 	WatchedStatus      string
+	ReleaseSort        string
 	ReleaseDateMissing bool
+	InLibrary          bool
 	Seasons            []PersonSeason
 }
 
@@ -173,7 +176,7 @@ func saveEpisodeCreditRows(ctx context.Context, tx *sql.Tx, titleID, episodeID i
 
 func (s *Store) PersonTitles(ctx context.Context, personID int64) ([]PersonTitle, error) {
 	rows, err := s.db.QueryContext(ctx, `SELECT t.media_type, t.tmdb_id, t.name, t.release_date, t.release_year, t.poster_path,
-		t.episode_sync_status, c.category, COALESCE(c.character_name, ''), COALESCE(c.job, ''), COALESCE(c.department, '')
+		COALESCE(t.overview, ''), t.episode_sync_status, c.category, COALESCE(c.character_name, ''), COALESCE(c.job, ''), COALESCE(c.department, '')
 		FROM credits c JOIN titles t ON t.id = c.title_id
 		WHERE c.person_tmdb_id = ? AND t.watched = 1 AND t.import_status = 'complete'
 		ORDER BY t.name COLLATE NOCASE, t.tmdb_id, t.media_type, c.id`, personID)
@@ -184,18 +187,22 @@ func (s *Store) PersonTitles(ctx context.Context, personID int64) ([]PersonTitle
 	var titles []PersonTitle
 	seenRoles := map[string]map[string]bool{}
 	for rows.Next() {
-		var media, name, status, category, character, job, department string
+		var media, name, overview, status, category, character, job, department string
 		var id int64
 		var releaseDate sql.NullString
 		var releaseYear sql.NullInt64
 		var posterPath sql.NullString
-		if err := rows.Scan(&media, &id, &name, &releaseDate, &releaseYear, &posterPath, &status,
+		if err := rows.Scan(&media, &id, &name, &releaseDate, &releaseYear, &posterPath, &overview, &status,
 			&category, &character, &job, &department); err != nil {
 			return nil, err
 		}
 		key := fmt.Sprintf("%s:%d", media, id)
 		if len(titles) == 0 || titles[len(titles)-1].MediaType != media || titles[len(titles)-1].TMDBID != id {
-			title := PersonTitle{MediaType: media, TMDBID: id, Name: name, PosterPath: posterPath, SyncStatus: status}
+			title := PersonTitle{MediaType: media, TMDBID: id, Name: name, PosterPath: posterPath, Overview: overview, SyncStatus: status, InLibrary: true}
+			title.ReleaseSort = releaseDate.String
+			if title.ReleaseSort == "" && releaseYear.Valid {
+				title.ReleaseSort = fmt.Sprintf("%04d", releaseYear.Int64)
+			}
 			if media == "movie" {
 				title.WatchedStatus = "watched"
 				title.ReleaseDateMissing = !releaseDate.Valid

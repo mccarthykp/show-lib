@@ -96,3 +96,23 @@ func TestGetSeriesWithAPIKey(t *testing.T) {
 		t.Fatalf("series = %+v, err = %v", series, err)
 	}
 }
+
+func TestGetPersonCombinedCredits(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/person/1158/combined_credits" || r.Header.Get("Authorization") != "Bearer test-token" {
+			t.Errorf("unexpected request path or authorization")
+		}
+		_, _ = w.Write([]byte(`{"cast":[{"id":769,"media_type":"movie","title":"Goodfellas","release_date":"1990-09-12","character":"Henry Hill"}],"crew":[{"id":42,"media_type":"tv","name":"A Series","first_air_date":"2020-01-02","job":"Director"}]}`))
+	}))
+	defer server.Close()
+	client, err := New("test-token", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	client.baseURL = server.URL
+	credits, err := client.GetPersonCombinedCredits(context.Background(), 1158)
+	if err != nil || len(credits.Cast) != 1 || credits.Cast[0].Title != "Goodfellas" ||
+		len(credits.Crew) != 1 || credits.Crew[0].Name != "A Series" {
+		t.Fatalf("combined credits = %+v, err = %v", credits, err)
+	}
+}

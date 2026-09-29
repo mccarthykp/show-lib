@@ -1,6 +1,7 @@
 services:
   showlib:
     build: .
+    user: "${SHOWLIB_UID:-1000}:${SHOWLIB_GID:-1000}"
     env_file:
       - .env
     environment:

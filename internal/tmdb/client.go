@@ -52,6 +52,7 @@ type SearchItem struct {
 	ReleaseDate  string `json:"release_date"`
 	FirstAirDate string `json:"first_air_date"`
 	PosterPath   string `json:"poster_path"`
+	Overview     string `json:"overview"`
 }
 
 type SearchResults struct {
@@ -134,6 +135,26 @@ type Person struct {
 	ProfilePath string `json:"profile_path"`
 }
 
+type PersonCredit struct {
+	ID           int64  `json:"id"`
+	MediaType    string `json:"media_type"`
+	Title        string `json:"title"`
+	Name         string `json:"name"`
+	ReleaseDate  string `json:"release_date"`
+	FirstAirDate string `json:"first_air_date"`
+	PosterPath   string `json:"poster_path"`
+	Overview     string `json:"overview"`
+	Character    string `json:"character"`
+	Department   string `json:"department"`
+	Job          string `json:"job"`
+	CreditID     string `json:"credit_id"`
+}
+
+type PersonCombinedCredits struct {
+	Cast []PersonCredit `json:"cast"`
+	Crew []PersonCredit `json:"crew"`
+}
+
 func New(token, apiKey string) (*Client, error) {
 	if strings.TrimSpace(token) == "" && strings.TrimSpace(apiKey) == "" {
 		return nil, errors.New("TMDB credential is required")
@@ -196,6 +217,15 @@ func (c *Client) GetPerson(ctx context.Context, id int64) (Person, error) {
 	var person Person
 	err := c.get(ctx, "/person/"+strconv.FormatInt(id, 10), &person)
 	return person, err
+}
+
+func (c *Client) GetPersonCombinedCredits(ctx context.Context, id int64) (PersonCombinedCredits, error) {
+	if id <= 0 {
+		return PersonCombinedCredits{}, errors.New("TMDB person ID must be positive")
+	}
+	var credits PersonCombinedCredits
+	err := c.get(ctx, "/person/"+strconv.FormatInt(id, 10)+"/combined_credits", &credits)
+	return credits, err
 }
 
 func (c *Client) GetSeriesAggregateCredits(ctx context.Context, id int64) (AggregateCredits, error) {

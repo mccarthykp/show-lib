@@ -20,12 +20,15 @@ import (
 )
 
 type searchHit struct {
-	MediaType  string
-	TMDBID     int64
-	Name       string
-	Year       string
-	PosterPath string
-	InLibrary  bool
+	MediaType   string
+	TMDBID      int64
+	Name        string
+	Year        string
+	ReleaseDate string
+	PosterPath  string
+	Overview    string
+	InLibrary   bool
+	InWatchlist bool
 }
 
 func (s *Server) add(w http.ResponseWriter, r *http.Request) {
@@ -85,8 +88,24 @@ func (s *Server) add(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		markSavedSearchHits(data.Results, saved)
+		watchlist, err := s.store.ListWatchlist(r.Context())
+		if err != nil {
+			http.Error(w, "could not check watchlist", http.StatusInternalServerError)
+			return
+		}
+		markWatchlistedSearchHits(data.Results, watchlist)
 	}
 	s.render(w, data)
+}
+
+func markWatchlistedSearchHits(hits []searchHit, watchlist []store.WatchlistTitle) {
+	watchlisted := make(map[string]bool, len(watchlist))
+	for _, title := range watchlist {
+		watchlisted[appearanceKey(title.MediaType, title.TMDBID)] = true
+	}
+	for i := range hits {
+		hits[i].InWatchlist = watchlisted[appearanceKey(hits[i].MediaType, hits[i].TMDBID)]
+	}
 }
 
 func markSavedSearchHits(hits []searchHit, saved []store.Title) {
@@ -177,14 +196,14 @@ func (s *Server) preview(w http.ResponseWriter, r *http.Request) {
 	}
 	data := pageData{Kind: "preview", PreviewMedia: media, PreviewID: id}
 	if media == "movie" {
-		movie, err := s.tmdb.GetMovie(r.Context(), id)
+		movie, err := s.movieDetails(r.Context(), id)
 		if err != nil {
 			http.Error(w, "TMDB title unavailable: "+err.Error(), http.StatusBadGateway)
 			return
 		}
 		data.Heading, data.PreviewYear, data.PreviewPoster = movie.Title, firstYear(movie.ReleaseDate), movie.PosterPath
 	} else {
-		series, err := s.tmdb.GetSeries(r.Context(), id)
+		series, err := s.seriesDetails(r.Context(), id)
 		if err != nil {
 			http.Error(w, "TMDB title unavailable: "+err.Error(), http.StatusBadGateway)
 			return
@@ -203,7 +222,7 @@ func (s *Server) preview(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			data.SelectedSeason = season
-			seasonDetails, err := s.tmdb.GetSeason(r.Context(), id, season)
+			seasonDetails, err := s.seasonDetails(r.Context(), id, season)
 			if err != nil {
 				data.Error = "Episodes are temporarily unavailable: " + err.Error()
 			} else {
@@ -216,6 +235,19 @@ func (s *Server) preview(w http.ResponseWriter, r *http.Request) {
 	}
 	if existing, err := s.store.GetTitle(r.Context(), media, id); err == nil && existing.ImportStatus == "complete" {
 		data.AlreadyAdded = true
+	}
+	if !data.AlreadyAdded {
+		watchlist, err := s.store.ListWatchlist(r.Context())
+		if err != nil {
+			http.Error(w, "could not check watchlist", http.StatusInternalServerError)
+			return
+		}
+		for _, title := range watchlist {
+			if title.MediaType == media && title.TMDBID == id {
+				data.Watchlisted = true
+				break
+			}
+		}
 	}
 	s.render(w, data)
 }
@@ -235,15 +267,19 @@ func (s *Server) postAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req := store.StartImportRequest{MediaType: media, TMDBID: id}
+	var cachedMovie *tmdb.Movie
+	var cachedSeries *tmdb.Series
+	var cachedSeasons map[int]tmdb.SeasonDetails
 	if media == "movie" {
-		movie, err := s.tmdb.GetMovie(r.Context(), id)
+		movie, err := s.movieDetails(r.Context(), id)
 		if err != nil {
 			http.Error(w, "TMDB title unavailable: "+err.Error(), http.StatusBadGateway)
 			return
 		}
 		req.Name = movie.Title
+		cachedMovie = &movie
 	} else {
-		series, err := s.tmdb.GetSeries(r.Context(), id)
+		series, err := s.seriesDetails(r.Context(), id)
 		if err != nil {
 			http.Error(w, "TMDB title unavailable: "+err.Error(), http.StatusBadGateway)
 			return
@@ -254,7 +290,7 @@ func (s *Server) postAdd(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "select a valid season and episode", http.StatusBadRequest)
 			return
 		}
-		details, err := s.tmdb.GetSeason(r.Context(), id, season)
+		details, err := s.seasonDetails(r.Context(), id, season)
 		if err != nil {
 			http.Error(w, "TMDB episodes unavailable: "+err.Error(), http.StatusBadGateway)
 			return
@@ -271,6 +307,8 @@ func (s *Server) postAdd(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		req.Name, req.Season, req.Episode, req.EpisodeTMDBID = series.Name, &season, &episodeNumber, &episodeID
+		cachedSeries = &series
+		cachedSeasons = map[int]tmdb.SeasonDetails{season: details}
 	}
 	result, token, err := s.store.StartImport(r.Context(), req)
 	if err != nil {
@@ -278,7 +316,14 @@ func (s *Server) postAdd(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if result == store.ImportStarted {
-		s.runImport(media, id, token)
+		s.runImportWithDetails(media, id, token, cachedMovie, cachedSeries, cachedSeasons)
+	}
+	if err := s.store.RemoveFromWatchlist(r.Context(), media, id); err != nil {
+		log.Printf("remove %s:%d from watchlist after adding: %v", media, id, err)
+	}
+	if inlineTitleAction(r) {
+		w.WriteHeader(http.StatusNoContent)
+		return
 	}
 	http.Redirect(w, r, fmt.Sprintf("/titles/%s/%d", media, id), http.StatusSeeOther)
 }
@@ -356,13 +401,29 @@ func (s *Server) remove(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) runImport(media string, id int64, token string) {
+	s.runImportWithDetails(media, id, token, nil, nil, nil)
+}
+
+func (s *Server) runImportWithDetails(media string, id int64, token string, movie *tmdb.Movie, series *tmdb.Series, seasons map[int]tmdb.SeasonDetails) {
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Minute)
 		defer cancel()
-		err := s.importer.Run(ctx, media, id, token)
+		var err error
+		switch {
+		case media == "movie" && movie != nil:
+			err = s.importer.RunMovie(ctx, id, token, *movie)
+		case media == "tv" && series != nil:
+			err = s.importer.RunSeries(ctx, id, token, *series)
+		default:
+			err = s.importer.Run(ctx, media, id, token)
+		}
 		if err == nil {
 			if media == "tv" {
-				go s.syncPersonEpisodes(id)
+				if series != nil {
+					go s.syncPersonEpisodesFromDetails(id, *series, seasons)
+				} else {
+					go s.syncPersonEpisodes(id)
+				}
 			}
 			return
 		}
@@ -389,7 +450,7 @@ func movieHits(query string, items []tmdb.SearchItem) []searchHit {
 	for _, item := range items {
 		if item.ID > 0 && search.Score(query, item.Title) >= 0 {
 			hits = append(hits, searchHit{MediaType: "movie", TMDBID: item.ID, Name: item.Title,
-				Year: firstYear(item.ReleaseDate), PosterPath: item.PosterPath})
+				Year: firstYear(item.ReleaseDate), ReleaseDate: item.ReleaseDate, PosterPath: item.PosterPath, Overview: strings.TrimSpace(item.Overview)})
 		}
 	}
 	return hits
@@ -400,7 +461,7 @@ func seriesHits(query string, items []tmdb.SearchItem) []searchHit {
 	for _, item := range items {
 		if item.ID > 0 && search.Score(query, item.Name) >= 0 {
 			hits = append(hits, searchHit{MediaType: "tv", TMDBID: item.ID, Name: item.Name,
-				Year: firstYear(item.FirstAirDate), PosterPath: item.PosterPath})
+				Year: firstYear(item.FirstAirDate), ReleaseDate: item.FirstAirDate, PosterPath: item.PosterPath, Overview: strings.TrimSpace(item.Overview)})
 		}
 	}
 	return hits
@@ -438,4 +499,8 @@ func sameOrigin(r *http.Request) bool {
 	}
 	parsed, err := url.Parse(origin)
 	return err == nil && strings.EqualFold(parsed.Host, r.Host)
+}
+
+func inlineTitleAction(r *http.Request) bool {
+	return strings.Contains(r.Header.Get("Accept"), "application/json")
 }

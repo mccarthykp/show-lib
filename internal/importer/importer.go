@@ -16,65 +16,86 @@ type Service struct {
 }
 
 func (s *Service) Run(ctx context.Context, mediaType string, id int64, token string) error {
-	var data store.ImportData
 	switch mediaType {
 	case "movie":
 		movie, err := s.TMDB.GetMovie(ctx, id)
 		if err != nil {
 			return fmt.Errorf("load movie: %w", err)
 		}
-		credits, err := s.TMDB.GetMovieCredits(ctx, id)
-		if err != nil {
-			return fmt.Errorf("load movie credits: %w", err)
-		}
-		data = movieData(movie, credits)
+		return s.RunMovie(ctx, id, token, movie)
 	case "tv":
 		series, err := s.TMDB.GetSeries(ctx, id)
 		if err != nil {
 			return fmt.Errorf("load series: %w", err)
 		}
-		credits, err := s.TMDB.GetSeriesAggregateCredits(ctx, id)
-		if err != nil {
-			return fmt.Errorf("load series credits: %w", err)
-		}
-		data = seriesData(series, credits)
+		return s.RunSeries(ctx, id, token, series)
 	default:
 		return fmt.Errorf("unsupported media type %q", mediaType)
 	}
-	if err := s.Store.CompleteImport(ctx, mediaType, id, token, data); err != nil {
+}
+
+func (s *Service) RunMovie(ctx context.Context, id int64, token string, movie tmdb.Movie) error {
+	credits, err := s.TMDB.GetMovieCredits(ctx, id)
+	if err != nil {
+		return fmt.Errorf("load movie credits: %w", err)
+	}
+	if err := s.Store.CompleteImport(ctx, "movie", id, token, movieData(movie, credits)); err != nil {
+		return fmt.Errorf("save import: %w", err)
+	}
+	return nil
+}
+
+func (s *Service) RunSeries(ctx context.Context, id int64, token string, series tmdb.Series) error {
+	credits, err := s.TMDB.GetSeriesAggregateCredits(ctx, id)
+	if err != nil {
+		return fmt.Errorf("load series credits: %w", err)
+	}
+	if err := s.Store.CompleteImport(ctx, "tv", id, token, seriesData(series, credits)); err != nil {
 		return fmt.Errorf("save import: %w", err)
 	}
 	return nil
 }
 
 func (s *Service) SyncEpisodes(ctx context.Context, id int64) error {
+	return s.SyncEpisodesFromDetails(ctx, id, nil, nil)
+}
+
+func (s *Service) SyncEpisodesFromDetails(ctx context.Context, id int64, series *tmdb.Series, seasons map[int]tmdb.SeasonDetails) error {
 	titleID, started, err := s.Store.StartEpisodeSync(ctx, id)
 	if err != nil || !started {
 		return err
 	}
-	if err = s.syncEpisodes(ctx, id, titleID); err != nil {
+	if err = s.syncEpisodes(ctx, id, titleID, series, seasons); err != nil {
 		_ = s.Store.FailEpisodeSync(context.Background(), titleID, err.Error())
 	}
 	return err
 }
 
-func (s *Service) syncEpisodes(ctx context.Context, id, titleID int64) error {
+func (s *Service) syncEpisodes(ctx context.Context, id, titleID int64, cachedSeries *tmdb.Series, cachedSeasons map[int]tmdb.SeasonDetails) error {
 	title, err := s.Store.GetTitle(ctx, "tv", id)
 	if err != nil {
 		return fmt.Errorf("load saved progress: %w", err)
 	}
-	series, err := s.TMDB.GetSeries(ctx, id)
-	if err != nil {
-		return fmt.Errorf("load series seasons: %w", err)
+	var series tmdb.Series
+	if cachedSeries != nil {
+		series = *cachedSeries
+	} else {
+		series, err = s.TMDB.GetSeries(ctx, id)
+		if err != nil {
+			return fmt.Errorf("load series seasons: %w", err)
+		}
 	}
 	var episodes []store.EpisodeInput
 	for _, season := range series.Seasons {
 		if season.SeasonNumber == 0 || season.EpisodeCount == 0 {
 			continue
 		}
-		details, err := s.TMDB.GetSeason(ctx, id, season.SeasonNumber)
-		if err != nil {
-			return fmt.Errorf("load season %d: %w", season.SeasonNumber, err)
+		details, ok := cachedSeasons[season.SeasonNumber]
+		if !ok {
+			details, err = s.TMDB.GetSeason(ctx, id, season.SeasonNumber)
+			if err != nil {
+				return fmt.Errorf("load season %d: %w", season.SeasonNumber, err)
+			}
 		}
 		seasonName := details.Name
 		if seasonName == "" {

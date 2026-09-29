@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.parse import quote
 
 
-TABLES = ("titles", "people", "credits", "episodes", "episode_person_credits")
+TABLES = ("titles", "people", "credits", "episodes", "episode_person_credits", "watchlist")
 
 
 def literal(value):
@@ -36,6 +36,11 @@ def main():
         source.backup(snapshot)
         if snapshot.execute("PRAGMA integrity_check").fetchone()[0] != "ok":
             raise SystemExit("source database failed its integrity check")
+        foreign_key_errors = list(snapshot.execute("PRAGMA foreign_key_check"))
+        if foreign_key_errors:
+            raise SystemExit(
+                f"source database has {len(foreign_key_errors)} foreign-key violations"
+            )
         with output_path.open("wb") as output:
             with gzip.GzipFile(filename="", mode="wb", fileobj=output, compresslevel=9, mtime=0) as compressed:
                 compressed.write(b"-- Show-lib opt-in library migration 0002; generated from a consistent database backup.\n")

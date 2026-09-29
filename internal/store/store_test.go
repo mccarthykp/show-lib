@@ -96,10 +96,6 @@ func TestOpenMigratesAndPersistsMultipleCredits(t *testing.T) {
 	if err != nil || len(titles) != 1 {
 		t.Fatalf("listed titles = %d, err = %v", len(titles), err)
 	}
-	people, err := s.ListPeople(ctx)
-	if err != nil || len(people) != 1 {
-		t.Fatalf("listed people = %d, err = %v", len(people), err)
-	}
 	if _, err := s.db.ExecContext(ctx, `INSERT INTO titles(media_type, tmdb_id, name, import_status, watched)
 		VALUES ('movie', 769, 'Goodfellas', 'importing', 1)`); err != nil {
 		t.Fatal(err)

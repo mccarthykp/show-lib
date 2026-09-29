@@ -41,7 +41,7 @@ func TestLibrarySnapshotRestoresFullLibrary(t *testing.T) {
 		t.Fatalf("fresh library is not empty: %d titles, %v", len(titles), err)
 	}
 	count, err := s.ApplyLibrarySnapshot(ctx)
-	if err != nil || count != 185 {
+	if err != nil || count != 263 {
 		t.Fatalf("library snapshot = %d titles, %v", count, err)
 	}
 	if _, err := s.ApplyLibrarySnapshot(ctx); err == nil {
@@ -56,7 +56,7 @@ func TestLibrarySnapshotRestoresFullLibrary(t *testing.T) {
 	}
 	defer s.Close()
 	titles, err := s.ListTitles(ctx)
-	if err != nil || len(titles) != 185 {
+	if err != nil || len(titles) != 263 {
 		t.Fatalf("reopened library = %d titles, %v", len(titles), err)
 	}
 	for _, tc := range []struct {
@@ -69,7 +69,10 @@ func TestLibrarySnapshotRestoresFullLibrary(t *testing.T) {
 			t.Fatalf("restored series %d: %+v, %v", tc.id, title, err)
 		}
 	}
-	for table, want := range map[string]int{"people": 38093, "credits": 52376, "episodes": 5679, "episode_person_credits": 129776} {
+	for table, want := range map[string]int{
+		"people": 49657, "credits": 70532, "episodes": 6343,
+		"episode_person_credits": 150969, "watchlist": 30,
+	} {
 		var got int
 		if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table).Scan(&got); err != nil || got != want {
 			t.Fatalf("restored %s = %d, want %d, err = %v", table, got, want, err)

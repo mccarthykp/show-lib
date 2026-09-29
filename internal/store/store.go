@@ -33,9 +33,10 @@ type Title struct {
 }
 
 type Person struct {
-	TMDBID int64
-	Name   string
-	Roles  string
+	TMDBID     int64
+	Name       string
+	Roles      string
+	MatchLabel string
 }
 
 func Open(ctx context.Context, path string) (*Store, error) {
@@ -167,27 +168,6 @@ func (s *Store) ListPendingTitles(ctx context.Context) ([]Title, error) {
 		titles = append(titles, title)
 	}
 	return titles, rows.Err()
-}
-
-func (s *Store) ListPeople(ctx context.Context) ([]Person, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT p.tmdb_id, p.name FROM people p
-		JOIN credits c ON c.person_tmdb_id = p.tmdb_id
-		JOIN titles t ON t.id = c.title_id
-		WHERE t.watched = 1 AND t.import_status = 'complete'
-		ORDER BY p.name COLLATE NOCASE, p.tmdb_id`)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var people []Person
-	for rows.Next() {
-		var person Person
-		if err := rows.Scan(&person.TMDBID, &person.Name); err != nil {
-			return nil, err
-		}
-		people = append(people, person)
-	}
-	return people, rows.Err()
 }
 
 func (s *Store) GetPerson(ctx context.Context, tmdbID int64) (Person, error) {

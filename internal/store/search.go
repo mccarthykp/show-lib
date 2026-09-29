@@ -103,7 +103,8 @@ func (s *Store) searchPeopleFuzzy(ctx context.Context, query string) ([]Person, 
 	}
 	const (
 		nameMatch = iota
-		roleMatch
+		castRoleMatch
+		crewRoleMatch
 	)
 	matches := map[int64]*fuzzyPerson{}
 	add := func(id int64, name string, score, kind int, role string) {
@@ -134,10 +135,6 @@ func (s *Store) searchPeopleFuzzy(ctx context.Context, query string) ([]Person, 
 		roleScore := search.Score(query, role)
 		matchedRole := role
 		if category == "crew" {
-			role = strings.TrimSpace(job)
-			if role == "" {
-				role = strings.TrimSpace(department)
-			}
 			roleScore = search.Score(query, job)
 			if score := search.Score(query, department); score >= 0 && (roleScore < 0 || score < roleScore) {
 				roleScore, matchedRole = score, strings.TrimSpace(department)
@@ -145,8 +142,12 @@ func (s *Store) searchPeopleFuzzy(ctx context.Context, query string) ([]Person, 
 				matchedRole = strings.TrimSpace(job)
 			}
 		}
+		roleKind := castRoleMatch
+		if category == "crew" {
+			roleKind = crewRoleMatch
+		}
 		add(id, name, search.Score(query, name), nameMatch, "")
-		add(id, name, roleScore, roleMatch, matchedRole)
+		add(id, name, roleScore, roleKind, matchedRole)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
@@ -154,6 +155,11 @@ func (s *Store) searchPeopleFuzzy(ctx context.Context, query string) ([]Person, 
 	items := make([]*fuzzyPerson, 0, len(matches))
 	for _, item := range matches {
 		item.person.Roles = strings.Join(item.roles, ", ")
+		if item.kind == castRoleMatch {
+			item.person.MatchLabel = "Role"
+		} else if item.kind == crewRoleMatch {
+			item.person.MatchLabel = "Crew"
+		}
 		items = append(items, item)
 	}
 	sort.Slice(items, func(i, j int) bool {

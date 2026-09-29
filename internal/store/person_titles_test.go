@@ -20,7 +20,7 @@ func TestPersonTitlesGroupRolesAndCreditedEpisodes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.CompleteImport(ctx, "tv", 1398, token, ImportData{Name: "The Sopranos", Credits: []CreditInput{
+	if err := s.CompleteImport(ctx, "tv", 1398, token, ImportData{Name: "The Sopranos", Overview: "Series overview", Credits: []CreditInput{
 		{Key: "role-a", PersonTMDBID: 1, PersonName: "Edie Falco", Category: "cast", CharacterName: "Carmela Soprano"},
 		{Key: "role-b", PersonTMDBID: 1, PersonName: "Edie Falco", Category: "cast", CharacterName: "Another Role"},
 	}}); err != nil {
@@ -30,7 +30,7 @@ func TestPersonTitlesGroupRolesAndCreditedEpisodes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := s.CompleteImport(ctx, "movie", 42, movieToken, ImportData{Name: "A Movie", ReleaseDate: "2003-05-17", Credits: []CreditInput{
+	if err := s.CompleteImport(ctx, "movie", 42, movieToken, ImportData{Name: "A Movie", ReleaseDate: "2003-05-17", Overview: "Movie overview", Credits: []CreditInput{
 		{Key: "movie", PersonTMDBID: 1, PersonName: "Edie Falco", Category: "cast", CharacterName: "Lead"},
 	}}); err != nil {
 		t.Fatal(err)
@@ -58,11 +58,11 @@ func TestPersonTitlesGroupRolesAndCreditedEpisodes(t *testing.T) {
 	if err != nil || len(titles) != 2 {
 		t.Fatalf("person titles = %+v, err=%v", titles, err)
 	}
-	if titles[0].Name != "A Movie" || titles[0].Period != "2003-05-17" || titles[0].Roles != "Lead" {
+	if titles[0].Name != "A Movie" || titles[0].Period != "2003-05-17" || titles[0].Overview != "Movie overview" || titles[0].Roles != "Lead" {
 		t.Fatalf("movie = %+v", titles[0])
 	}
 	tv := titles[1]
-	if tv.Name != "The Sopranos" || tv.Roles != "Carmela Soprano, Another Role" || tv.Period != "1999-2000, 2 eps" ||
+	if tv.Name != "The Sopranos" || tv.Overview != "Series overview" || tv.Roles != "Carmela Soprano, Another Role" || tv.Period != "1999-2000, 2 eps" ||
 		len(tv.Seasons) != 2 || len(tv.Seasons[0].Episodes) != 1 || tv.Seasons[0].Episodes[0].Name != "Pilot" {
 		t.Fatalf("TV credits = %+v", tv)
 	}

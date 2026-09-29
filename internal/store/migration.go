@@ -11,8 +11,8 @@ import (
 	"strings"
 )
 
-// The first migration runs at startup. The second is an opt-in snapshot of
-// this project's current library and is never applied by normal startup.
+// Migration 1 creates an empty database at startup. Migration 2 is an opt-in
+// snapshot of this project's current library and is never applied normally.
 //
 //go:embed migrations/0001_initial.sql migrations/0002_library_snapshot.sql.gz
 var migrationFiles embed.FS
@@ -34,14 +34,15 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		return fmt.Errorf("check initial migration: %w", err)
 	}
 	if applied > 0 {
-		// Historical ledgers may also contain versions 2–8. Their data stays
-		// untouched as long as the database has the current schema.
+		// Historical ledger rows are left untouched when the database already
+		// has the complete schema represented by the squashed migration 1.
 		for _, query := range []string{
 			"SELECT poster_path, overview, watched_episode_tmdb_id FROM titles LIMIT 0",
 			"SELECT profile_path, profile_checked_at FROM people LIMIT 0",
 			"SELECT id FROM credits LIMIT 0",
 			"SELECT id FROM episodes LIMIT 0",
 			"SELECT episode_id FROM episode_person_credits LIMIT 0",
+			"SELECT media_type, tmdb_id FROM watchlist LIMIT 0",
 		} {
 			rows, err := tx.QueryContext(ctx, query)
 			if err != nil {
@@ -91,7 +92,7 @@ func (s *Store) ApplyLibrarySnapshot(ctx context.Context) (int, error) {
 	if applied > 0 {
 		return 0, errors.New("library migration 2 is already recorded")
 	}
-	for _, table := range []string{"titles", "people", "credits", "episodes", "episode_person_credits"} {
+	for _, table := range []string{"titles", "people", "credits", "episodes", "episode_person_credits", "watchlist"} {
 		var count int
 		if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table).Scan(&count); err != nil {
 			return 0, fmt.Errorf("check %s before library migration: %w", table, err)
@@ -133,11 +134,12 @@ func (s *Store) ApplyLibrarySnapshot(ctx context.Context) (int, error) {
 		table string
 		count int
 	}{
-		{"titles", 185},
-		{"people", 38093},
-		{"credits", 52376},
-		{"episodes", 5679},
-		{"episode_person_credits", 129776},
+		{"titles", 263},
+		{"people", 49657},
+		{"credits", 70532},
+		{"episodes", 6343},
+		{"episode_person_credits", 150969},
+		{"watchlist", 30},
 	} {
 		var count int
 		if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM "+expected.table).Scan(&count); err != nil {
@@ -153,5 +155,5 @@ func (s *Store) ApplyLibrarySnapshot(ctx context.Context) (int, error) {
 	if err := tx.Commit(); err != nil {
 		return 0, fmt.Errorf("commit library migration: %w", err)
 	}
-	return 185, nil
+	return 263, nil
 }

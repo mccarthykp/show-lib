@@ -106,14 +106,23 @@ func TestConnectionsFollowWatchedProgressAndRemoval(t *testing.T) {
 		t.Fatalf("initial connection summary = %q", anchor)
 	}
 	for _, want := range []string{
-		"Ben</a>, <a href=\"/people/3\">Cal</a> also appear in <a href=\"/titles/tv/2\">Second</a>",
-		"Anna</a> also appears in <a href=\"/titles/movie/3\">Movie</a>, <a href=\"/titles/tv/2\">Second</a>",
-		"Anchor Friend in Anchor; Second Friend in",
+		"Ben</a>, <a href=\"/people/3\">Cal</a> <span class=\"connection-relation\">also appear in</span> <a href=\"/titles/tv/2\">Second</a>",
+		"Anna</a> <span class=\"connection-relation\">also appears in</span> <a href=\"/titles/movie/3\">Movie</a>, <a href=\"/titles/tv/2\">Second</a>",
+		"<a href=\"/people/2\">Ben</a>: Second Friend in <a href=\"/titles/tv/2\">Second</a>",
+		`<li class="connection-current-credit">Anchor Lead in Anchor`,
+		"<li>Movie Lead in <a href=\"/titles/movie/3\">Movie</a>",
 		"1 credited episode in Anchor",
+		"1 credited episode in Second",
 	} {
 		if !strings.Contains(anchor, want) {
 			t.Errorf("anchor connections missing %q", want)
 		}
+	}
+	currentCredit := strings.Index(anchor, `<li class="connection-current-credit">Anchor Lead in Anchor`)
+	firstOtherCredit := strings.Index(anchor, `<li>Movie Lead in <a href="/titles/movie/3">Movie</a>`)
+	if currentCredit < 0 || firstOtherCredit <= currentCredit || strings.Count(anchor, "Anchor Lead in Anchor") != 1 ||
+		strings.Contains(anchor, `<li><a href="/people/1">Anna</a>:`) {
+		t.Fatal("person-centered details do not show one current-title credit before the other credits")
 	}
 	if strings.Contains(anchor, "Future</a>") {
 		t.Fatal("future-only credit appeared before watched progress")
@@ -121,14 +130,14 @@ func TestConnectionsFollowWatchedProgressAndRemoval(t *testing.T) {
 	if strings.Contains(anchor, "Unmapped</a>") {
 		t.Fatal("unmapped aggregate credit appeared in connections")
 	}
-	if movie := panel("/titles/movie/3"); !strings.Contains(movie, `<summary>2 connections</summary>`) || !strings.Contains(movie, "Anna</a> also appears in") ||
+	if movie := panel("/titles/movie/3"); !strings.Contains(movie, `<summary>2 connections</summary>`) || !strings.Contains(movie, `Anna</a> <span class="connection-relation">also appears in</span>`) ||
 		!strings.Contains(movie, "Anchor</a>, <a href=\"/titles/tv/2\">Second</a>") {
 		t.Fatalf("movie-to-series connections = %q", movie)
 	}
 	if err := db.UpdateProgress(ctx, 2, 1, 2); err != nil {
 		t.Fatal(err)
 	}
-	if advanced := panel("/titles/tv/1"); !strings.Contains(advanced, `<summary>5 connections</summary>`) || !strings.Contains(advanced, "Future</a> also appear in") {
+	if advanced := panel("/titles/tv/1"); !strings.Contains(advanced, `<summary>5 connections</summary>`) || !strings.Contains(advanced, `Future</a> <span class="connection-relation">also appear in</span>`) {
 		t.Fatal("advancing progress did not reveal future credit")
 	}
 	if err := db.UpdateProgress(ctx, 2, 1, 1); err != nil {
