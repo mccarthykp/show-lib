@@ -70,13 +70,35 @@ table already contains data, or when migration 2 is already recorded.
 
 - Search TMDB for movies and TV shows, preview details, and add titles as
   watched or to the watchlist.
+
+  <img src="Assets/README/example-search.jpeg" width="30%" alt="Search">
+
 - Track the latest watched season and episode, including specials.
+
+  <img src="Assets/README/example-latest-watched.jpeg" width="30%" alt="Latest watched">
+
 - Browse and filter watched titles and the watchlist; choose a random watchlist
   title.
+
+  <img src="Assets/README/example-browse-watched.jpeg" width="30%" alt="Browse watched">
+
 - Search people by name, character, or crew role.
+
+  <img src="Assets/README/example-search-people.jpeg" width="30%" alt="Search People">
+
 - View a person's watched and unwatched appearances, grouped TV episodes, and
   add or remove titles directly from those results.
+
+  <img src="Assets/README/example-appearances.jpeg" width="30%" alt="Appearances">
+
 - Find cast and crew connections between watched titles.
+
+  <img src="Assets/README/example-connections.jpeg" width="30%" alt="Connections">
+
+- Manage a personal Watchlist.
+
+  <img src="Assets/README/example-watchlist.jpeg" width="30%" alt="Watchlist">
+
 - Retry interrupted title imports and episode-credit syncs without losing
   saved progress.
 
