@@ -73,14 +73,21 @@ table already contains data, or when migration 2 is already recorded.
 
   <img src="Assets/README/example-search.jpeg" width="30%" alt="Search">
 
+- Manage a personal Watchlist; choose a watchlist entry at random.
+
+  <img src="Assets/README/example-watchlist.jpeg" width="30%" alt="Watchlist">
+
+- Browse and filter watched titles.
+
+  <img src="Assets/README/example-browse-watched.jpeg" width="30%" alt="Browse watched">
+
 - Track the latest watched season and episode, including specials.
 
   <img src="Assets/README/example-latest-watched.jpeg" width="30%" alt="Latest watched">
 
-- Browse and filter watched titles and the watchlist; choose a random watchlist
-  title.
+- Find cast and crew connections between watched titles.
 
-  <img src="Assets/README/example-browse-watched.jpeg" width="30%" alt="Browse watched">
+  <img src="Assets/README/example-connections.jpeg" width="30%" alt="Connections">
 
 - Search people by name, character, or crew role.
 
@@ -90,14 +97,6 @@ table already contains data, or when migration 2 is already recorded.
   add or remove titles directly from those results.
 
   <img src="Assets/README/example-appearances.jpeg" width="30%" alt="Appearances">
-
-- Find cast and crew connections between watched titles.
-
-  <img src="Assets/README/example-connections.jpeg" width="30%" alt="Connections">
-
-- Manage a personal Watchlist.
-
-  <img src="Assets/README/example-watchlist.jpeg" width="30%" alt="Watchlist">
 
 - Retry interrupted title imports and episode-credit syncs without losing
   saved progress.
